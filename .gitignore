@@ -8,5 +8,4 @@ __pycache__/
 *.db
 *test*
 *.toml
-Procfile
 runtime.txt

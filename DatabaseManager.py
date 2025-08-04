@@ -4,17 +4,30 @@ from sqlalchemy.orm import sessionmaker
 from datetime import datetime
 import os
 from dotenv import load_dotenv
+from config import config
 
 load_dotenv()
 
-DATABASE_URL = "sqlite:///China_2025B.db"
+# Use config to get database URL (supports both SQLite and PostgreSQL)
+DATABASE_URL = config.DATABASE_URL
 
-engine = create_engine(
-    DATABASE_URL, 
-    connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {},
-    pool_pre_ping=True,
-    echo=False
-)
+# Configure engine based on database type
+if DATABASE_URL.startswith('postgresql'):
+    engine = create_engine(
+        DATABASE_URL,
+        pool_pre_ping=True,
+        echo=False,
+        pool_size=10,
+        max_overflow=20
+    )
+else:
+    # SQLite configuration for development
+    engine = create_engine(
+        DATABASE_URL, 
+        connect_args={"check_same_thread": False},
+        pool_pre_ping=True,
+        echo=False
+    )
 
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
