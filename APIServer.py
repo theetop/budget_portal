@@ -7,16 +7,33 @@ from typing import List, Dict, Any, Optional
 import threading
 from datetime import datetime, timedelta
 import uuid
+import os
 from pydantic import BaseModel
 
 from DatabaseManager import get_db, China2025B, UserSession, create_tables
+from config import config
 
-app = FastAPI(title="Budget Portal API", version="1.0.0")
+app = FastAPI(
+    title="Budget Portal API", 
+    version="1.0.0",
+    description="Budget Portal API for managing budget data and PowerBI integration"
+)
 
-# CORS middleware for Streamlit integration
+# CORS middleware - configure based on environment
+if config.is_production():
+    # In production, be more restrictive with CORS
+    allowed_origins = [
+        "https://*.streamlit.app",
+        "https://*.streamlitapp.com", 
+        "https://your-frontend-domain.com"  # Add your actual domain
+    ]
+else:
+    # In development, allow all origins
+    allowed_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -360,10 +377,12 @@ async def update_powerbi_async(data: List[Dict[str, Any]]):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint"""
+    """Health check endpoint with environment info"""
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
+        "environment": config.ENVIRONMENT,
+        "version": "1.0.0"
     }
 
 @app.get("/api/submission-status/{user_id}/{business_unit}")
@@ -390,4 +409,6 @@ async def get_submission_status(
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    port = int(os.getenv("PORT", config.API_PORT))  # Render uses PORT env var
+    host = "0.0.0.0" if config.is_production() else config.API_HOST
+    uvicorn.run(app, host=host, port=port)

@@ -2,6 +2,118 @@
 
 A comprehensive web application that provides an Excel-like interface for BU leaders to submit budget and sales data with Row Level Security (RLS), direct PowerBI integration, and support for simultaneous multi-user updates.
 
+## 🚀 Deployment
+
+### Frontend Deployment (Streamlit Cloud)
+
+1. **Push to GitHub**:
+   ```bash
+   git add .
+   git commit -m "Prepare for deployment"
+   git push origin main
+   ```
+
+2. **Deploy to Streamlit Cloud**:
+   - Go to [share.streamlit.io](https://share.streamlit.io)
+   - Connect your GitHub repository
+   - Set the main file path: `streamlit_app.py`
+   - Configure secrets in Streamlit Cloud dashboard
+
+3. **Configure Streamlit Secrets**:
+   In Streamlit Cloud dashboard, add these secrets:
+   ```toml
+   [general]
+   ENVIRONMENT = "production"
+   API_BASE_URL = "https://your-backend-app.onrender.com"
+
+   [database]
+   DATABASE_URL = "your-production-database-url"
+
+   [powerbi]
+   POWERBI_CLIENT_ID = "your-powerbi-client-id"
+   POWERBI_CLIENT_SECRET = "your-powerbi-client-secret"
+   POWERBI_TENANT_ID = "your-powerbi-tenant-id"
+   POWERBI_WORKSPACE_ID = "your-powerbi-workspace-id"
+   POWERBI_DATASET_ID = "your-powerbi-dataset-id"
+
+   [security]
+   SECRET_KEY = "your-production-secret-key"
+   SESSION_TIMEOUT_HOURS = "8"
+   ```
+
+### Backend Deployment (Render)
+
+1. **Create Render Account**: Go to [render.com](https://render.com)
+
+2. **Deploy Backend**:
+   - Connect your GitHub repository
+   - Create a new "Web Service"
+   - Set the build command: `pip install -r requirements.txt`
+   - Set the start command: `uvicorn APIServer:app --host 0.0.0.0 --port $PORT`
+
+3. **Configure Environment Variables** in Render dashboard:
+   ```
+   ENVIRONMENT=production
+   DATABASE_URL=your-database-url
+   POWERBI_CLIENT_ID=your-client-id
+   POWERBI_CLIENT_SECRET=your-client-secret
+   POWERBI_TENANT_ID=your-tenant-id
+   POWERBI_WORKSPACE_ID=your-workspace-id
+   POWERBI_DATASET_ID=your-dataset-id
+   SECRET_KEY=your-secret-key
+   ```
+
+4. **Update Frontend Configuration**:
+   - Copy your Render backend URL
+   - Update the `API_BASE_URL` in Streamlit secrets
+   - Redeploy the Streamlit app
+
+### Database Options
+
+**Option 1: PostgreSQL (Recommended for Production)**
+```bash
+# Add to requirements.txt
+psycopg2-binary>=2.9.7
+
+# Update DATABASE_URL
+DATABASE_URL=postgresql://username:password@host:port/database
+```
+
+**Option 2: SQLite (Simple, but limited)**
+```bash
+# Keep current setup - works for small deployments
+DATABASE_URL=sqlite:///./budget_data.db
+```
+
+### Post-Deployment Checklist
+
+- [ ] Backend API is accessible at your Render URL
+- [ ] Frontend can connect to the backend
+- [ ] Database connection is working
+- [ ] PowerBI integration is configured
+- [ ] Environment variables are set correctly
+- [ ] Health check endpoint returns "healthy" status
+- [ ] User authentication works
+- [ ] Data loading and saving functions properly
+
+## 🛠️ Development vs Production
+
+### Environment Configuration
+The application automatically detects the environment based on the `ENVIRONMENT` variable:
+
+- **Development**: Uses local database, allows all CORS origins
+- **Production**: Uses production database, restricts CORS origins
+
+### CORS Configuration
+- **Development**: Allows all origins (`["*"]`)
+- **Production**: Restricts to trusted domains (Streamlit Cloud, your domain)
+
+### Security Considerations
+- Change default secret keys in production
+- Use environment variables for sensitive data
+- Enable HTTPS in production
+- Implement proper logging and monitoring
+
 ## 🎯 Key Features
 
 ### Excel-like Interface

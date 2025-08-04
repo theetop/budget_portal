@@ -2,14 +2,16 @@ import streamlit as st
 import pandas as pd
 import requests
 import json
+import os
 from datetime import datetime
 from io import BytesIO
 import time
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 import plotly.express as px
 import plotly.graph_objects as go
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 from st_aggrid.shared import JsCode
+from config import config
 
 # Page configuration
 st.set_page_config(
@@ -19,8 +21,8 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# API Configuration
-API_BASE_URL = "http://127.0.0.1:8000"
+# API Configuration - Use environment-aware URL
+API_BASE_URL = config.get_api_base_url()
 
 # Custom CSS for Excel-like styling
 st.markdown("""
@@ -86,17 +88,18 @@ def init_session_state():
         st.session_state.last_refresh = datetime.now()
 
 
-def api_call(endpoint: str, method: str = "GET", data: Dict = None) -> Dict:
-    """Make API calls with error handling"""
+def api_call(endpoint: str, method: str = "GET", data: Optional[Dict] = None) -> Dict:
+    """Make API calls with error handling and timeout"""
     try:
         url = f"{API_BASE_URL}{endpoint}"
+        timeout = 30  # 30 seconds timeout for production
         
         if method == "GET":
-            response = requests.get(url, params=data)
+            response = requests.get(url, params=data, timeout=timeout)
         elif method == "POST":
-            response = requests.post(url, json=data)
+            response = requests.post(url, json=data, timeout=timeout)
         else:
-            response = requests.request(method, url, json=data)
+            response = requests.request(method, url, json=data, timeout=timeout)
         
         if response.status_code == 200:
             return response.json()
@@ -104,8 +107,11 @@ def api_call(endpoint: str, method: str = "GET", data: Dict = None) -> Dict:
             st.error(f"API Error: {response.status_code} - {response.text}")
             return {"success": False, "error": response.text}
             
+    except requests.exceptions.Timeout:
+        st.error("Request timed out. Please try again.")
+        return {"success": False, "error": "Request timeout"}
     except requests.exceptions.ConnectionError:
-        st.error("Cannot connect to API server. Please ensure the API server is running.")
+        st.error("Cannot connect to API server. Please check your internet connection and try again.")
         return {"success": False, "error": "Connection failed"}
     except Exception as e:
         st.error(f"Request failed: {str(e)}")
@@ -378,9 +384,17 @@ def display_dashboard():
         
         # Health check
         health_result = api_call("/api/health", "GET")
+        if health_result.get("status") == "healthy":
+            st.success("🟢 API Server Connected")
+        else:
+            st.error("🔴 API Server Disconnected")
+            if config.is_development():
+                st.info(f"API URL: {API_BASE_URL}")
+        
+        # PowerBI status (if available)
         if health_result.get("powerbi_connected"):
             st.success("🟢 PowerBI Connected")
-        else:
+        elif "powerbi_connected" in health_result:
             st.error("🔴 PowerBI Disconnected")
         
         # Logout

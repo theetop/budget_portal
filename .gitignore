@@ -7,3 +7,6 @@ __pycache__/
 *.xlsx
 *.db
 *test*
+*.toml
+Procfile
+runtime.txt
