@@ -1,16 +1,17 @@
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, Form
 from fastapi.middleware.cors import CORSMiddleware
+import pandas as pd
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 from typing import List, Dict, Any, Optional
 import threading
 from datetime import datetime, timedelta
 import uuid
-import json
 from pydantic import BaseModel
 
-from database import get_db, BudgetData, UserSession, create_tables
 from powerbi_service import PowerBIService
+
+from DatabaseManager import get_db, China2025B, UserSession, create_tables
 
 app = FastAPI(title="Budget Portal API", version="1.0.0")
 
@@ -35,18 +36,61 @@ class LoginRequest(BaseModel):
     user_id: str
     business_unit: str
 
-class BudgetUpdateRequest:
-    def __init__(self, user_id: str, business_unit: str, updates: List[Dict]):
-        self.user_id = user_id
-        self.business_unit = business_unit
-        self.updates = updates
+class BudgetUpdateRequest(BaseModel):
+    user_id: str
+    business_unit: str
+    updates: List[Dict]
+
+@app.get("/data")
+async def get_data(db: Session = Depends(get_db)):
+    """Get all data from china_2025B table"""
+    try:
+        data = db.query(China2025B).all()
+        result = [
+            {
+                "id": item.id,
+                "user_id": item.user_id,
+                "business_unit": item.business_unit,
+                "Sales_Region": item.Sales_Region,
+                "Customer_Note": item.Customer_Note,
+                "Customer_Group": item.Customer_Group,
+                "BizType": item.BizType,
+                "Vendor_Category": item.Vendor_Category,
+                "Vendor_Grouping": item.Vendor_Grouping,
+                "ProductNature": item.ProductNature,
+                "Y2019A": item.Y2019A,
+                "Y2020A": item.Y2020A,
+                "Y2021A": item.Y2021A,
+                "Y2022A": item.Y2022A,
+                "Y2023A": item.Y2023A,
+                "Y2024B": item.Y2024B,
+                "Y2024Q3F": item.Y2024Q3F,
+                "Y2024A08": item.Y2024A08,
+                "Y2024R08": item.Y2024R08,
+                "avg1924": item.avg1924,
+                "Y2025B": item.Y2025B,
+                "Y2026P": item.Y2026P,
+                "Y2027P": item.Y2027P,
+                "Y2028P": item.Y2028P,
+                "Y2029P": item.Y2029P,
+                "Sales_Remark": item.Sales_Remark
+            } for item in data
+        ]
+        return {"success": True, "data": result}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch data: {str(e)}")
 
 @app.post("/api/login")
 async def login(request: LoginRequest, db: Session = Depends(get_db)):
     """Authenticate user and create session"""
     try:
-        user_id = request.user_id
-        business_unit = request.business_unit
+        user = db.query(UserSession).filter(UserSession.user_id == request.user_id).first()
+        if not user:
+            raise HTTPException(status_code=401, detail="Invalid user ID")
+        
+        # Validate business unit if needed
+        if not request.business_unit:
+            raise HTTPException(status_code=400, detail="Business unit required")
         
         # Generate session token
         session_token = str(uuid.uuid4())
@@ -54,7 +98,7 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         
         # Check if user session exists
         existing_session = db.query(UserSession).filter(
-            UserSession.user_id == user_id
+            UserSession.user_id == request.user_id,
         ).first()
         
         if existing_session:
@@ -63,8 +107,8 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
             existing_session.is_active = True
         else:
             new_session = UserSession(
-                user_id=user_id,
-                business_unit=business_unit,
+                user_id=request.user_id,
+                business_unit=request.business_unit,
                 session_token=session_token,
                 expires_at=expires_at
             )
@@ -75,8 +119,8 @@ async def login(request: LoginRequest, db: Session = Depends(get_db)):
         return {
             "success": True,
             "session_token": session_token,
-            "user_id": user_id,
-            "business_unit": business_unit
+            "user_id": request.user_id,
+            "business_unit": request.business_unit,
         }
     except Exception as e:
         db.rollback()
@@ -87,21 +131,23 @@ async def get_user_data(user_id: str, business_unit: str, db: Session = Depends(
     """Get data for specific user with RLS"""
     try:
         # First try to get data from local database
-        local_data = db.query(BudgetData).filter(
+        local_data = db.query(China2025B).filter(
             and_(
-                BudgetData.user_id == user_id,
-                BudgetData.business_unit == business_unit
+                China2025B.user_id == user_id,
+                China2025B.business_unit == business_unit
             )
         ).all()
         
         # If no local data, fetch from PowerBI
         if not local_data:
+            raise HTTPException(status_code=404, detail="No data found for user and business unit")
+            '''
             powerbi_data = powerbi_service.get_user_data_with_rls(user_id, business_unit)
-            
+
             if not powerbi_data.empty:
                 # Convert PowerBI data to local format and store
                 for _, row in powerbi_data.iterrows():
-                    budget_entry = BudgetData(
+                    budget_entry = China2025B(
                         business_unit=business_unit,
                         user_id=user_id,
                         product_category=row.get('ProductCategory', ''),
@@ -118,32 +164,44 @@ async def get_user_data(user_id: str, business_unit: str, db: Session = Depends(
                     db.add(budget_entry)
                 
                 db.commit()
-                local_data = db.query(BudgetData).filter(
+                local_data = db.query(China2025B).filter(
                     and_(
-                        BudgetData.user_id == user_id,
-                        BudgetData.business_unit == business_unit
+                        China2025B.user_id == user_id,
+                        China2025B.business_unit == business_unit
                     )
                 ).all()
+            '''
         
-        # Convert to dict format
-        result = []
-        for item in local_data:
-            result.append({
+        result = [
+            {
                 "id": item.id,
+                "user_id": item.user_id,
                 "business_unit": item.business_unit,
-                "product_category": item.product_category,
-                "region": item.region,
-                "quarter": item.quarter,
-                "year": item.year,
-                "historical_sales": item.historical_sales,
-                "target_sales": item.target_sales,
-                "market_share": item.market_share,
-                "budget_amount": item.budget_amount,
-                "forecast_sales": item.forecast_sales,
-                "comments": item.comments,
-                "is_submitted": item.is_submitted,
-                "updated_at": item.updated_at.isoformat() if item.updated_at else None
-            })
+                "Sales_Region": item.Sales_Region,
+                "Customer_Note": item.Customer_Note,
+                "Customer_Group": item.Customer_Group,
+                "BizType": item.BizType,
+                "Vendor_Category": item.Vendor_Category,
+                "Vendor_Grouping": item.Vendor_Grouping,
+                "ProductNature": item.ProductNature,
+                "Y2019A": item.Y2019A,
+                "Y2020A": item.Y2020A,
+                "Y2021A": item.Y2021A,
+                "Y2022A": item.Y2022A,
+                "Y2023A": item.Y2023A,
+                "Y2024B": item.Y2024B,
+                "Y2024Q3F": item.Y2024Q3F,
+                "Y2024A08": item.Y2024A08,
+                "Y2024R08": item.Y2024R08,
+                "avg1924": item.avg1924,
+                "Y2025B": item.Y2025B,
+                "Y2026P": item.Y2026P,
+                "Y2027P": item.Y2027P,
+                "Y2028P": item.Y2028P,
+                "Y2029P": item.Y2029P,
+                "Sales_Remark": item.Sales_Remark
+            } for item in local_data
+        ]
         
         return {"success": True, "data": result}
         
@@ -152,9 +210,7 @@ async def get_user_data(user_id: str, business_unit: str, db: Session = Depends(
 
 @app.post("/api/update")
 async def update_budget_data(
-    user_id: str,
-    business_unit: str,
-    updates: List[Dict[str, Any]],
+    request: BudgetUpdateRequest,
     db: Session = Depends(get_db)
 ):
     """Update budget data with thread safety"""
@@ -162,34 +218,37 @@ async def update_budget_data(
         try:
             updated_records = []
             
-            for update in updates:
+            for update in request.updates:
                 record_id = update.get("id")
                 if not record_id:
                     continue
                 
                 # Get existing record
-                record = db.query(BudgetData).filter(
+                record = db.query(China2025B).filter(
                     and_(
-                        BudgetData.id == record_id,
-                        BudgetData.user_id == user_id,
-                        BudgetData.business_unit == business_unit
+                        China2025B.id == record_id,
+                        China2025B.user_id == request.user_id,
+                        China2025B.business_unit == request.business_unit
                     )
                 ).first()
                 
                 if record:
                     # Update editable fields only
-                    if "budget_amount" in update:
-                        record.budget_amount = update["budget_amount"]
-                    if "forecast_sales" in update:
-                        record.forecast_sales = update["forecast_sales"]
-                    if "comments" in update:
-                        record.comments = update["comments"]
-                    
-                    record.updated_at = datetime.utcnow()
-                    record.version += 1
+                    if "Y2025B" in update:
+                        record.Y2025B = update["Y2025B"]
+                    if "Y2026P" in update:
+                        record.Y2026P = update["Y2026P"]
+                    if "Y2027P" in update:
+                        record.Y2027P = update["Y2027P"]
+                    if "Y2028P" in update:
+                        record.Y2028P = update["Y2028P"]
+                    if "Y2029P" in update:
+                        record.Y2029P = update["Y2029P"]
+                    if "Sales_Remark" in update:
+                        record.Sales_Remark = update["Sales_Remark"]
                     
                     updated_records.append(record.id)
-            
+                    
             db.commit()
             
             return {
@@ -213,38 +272,28 @@ async def submit_budget_data(
     with data_lock:
         try:
             # Mark all user's records as submitted
-            records = db.query(BudgetData).filter(
+            records = db.query(China2025B).filter(
                 and_(
-                    BudgetData.user_id == user_id,
-                    BudgetData.business_unit == business_unit,
-                    BudgetData.is_submitted == False
+                    China2025B.user_id == user_id,
+                    China2025B.business_unit == business_unit,
                 )
             ).all()
             
             if not records:
                 raise HTTPException(status_code=400, detail="No records to submit")
             
-            submission_time = datetime.utcnow()
-            submitted_data = []
-            
-            for record in records:
-                record.is_submitted = True
-                record.submitted_at = submission_time
-                
-                # Prepare data for PowerBI
-                submitted_data.append({
-                    "UserId": record.user_id,
-                    "BusinessUnit": record.business_unit,
-                    "ProductCategory": record.product_category,
-                    "Region": record.region,
-                    "Quarter": record.quarter,
-                    "Year": record.year,
-                    "BudgetAmount": record.budget_amount,
-                    "ForecastSales": record.forecast_sales,
-                    "Comments": record.comments,
-                    "SubmittedAt": submission_time.isoformat(),
-                    "Version": record.version
-                })
+            submitted_data = [
+                {
+                    "user_id": record.user_id,
+                    "business_unit": record.business_unit,
+                    "Y2025B": record.Y2025B,
+                    "Y2026P": record.Y2026P,
+                    "Y2027P": record.Y2027P,
+                    "Y2028P": record.Y2028P,
+                    "Y2029P": record.Y2029P,
+                    "Sales_Remark": record.Sales_Remark
+                } for record in records
+            ]
             
             db.commit()
             
@@ -257,7 +306,6 @@ async def submit_budget_data(
             return {
                 "success": True,
                 "submitted_records": len(records),
-                "submission_time": submission_time.isoformat(),
                 "message": "Data submitted successfully. PowerBI will be updated shortly."
             }
             
@@ -266,7 +314,7 @@ async def submit_budget_data(
             raise HTTPException(status_code=500, detail=f"Submission failed: {str(e)}")
 
 async def update_powerbi_async(data: List[Dict[str, Any]]):
-    """Background task to update PowerBI"""
+    """Background task to update PowerBI
     try:
         success = powerbi_service.push_data_to_dataset(data)
         if success:
@@ -277,6 +325,14 @@ async def update_powerbi_async(data: List[Dict[str, Any]]):
             print("Failed to update PowerBI")
     except Exception as e:
         print(f"PowerBI update error: {str(e)}")
+    """
+    
+    try:
+        df = pd.DataFrame(data)
+        df.to_csv('temp1_Powerbi_submission_data.csv', index=False)
+        print(f"PowerBI submission CSV updated with {len(data)} records")
+    except Exception as e:
+        print(f"PowerBI CSV update error: {str(e)}")
 
 @app.get("/api/health")
 async def health_check():
@@ -289,38 +345,22 @@ async def health_check():
     }
 
 @app.get("/api/submission-status/{user_id}/{business_unit}")
-async def get_submission_status(user_id: str, business_unit: str, db: Session = Depends(get_db)):
+async def get_submission_status(
+    user_id: str, 
+    business_unit: str, 
+    db: Session = Depends(get_db)
+):
     """Get submission status for user"""
     try:
-        total_records = db.query(BudgetData).filter(
+        total_records = db.query(China2025B).filter(
             and_(
-                BudgetData.user_id == user_id,
-                BudgetData.business_unit == business_unit
+                China2025B.user_id == user_id,
+                China2025B.business_unit == business_unit
             )
         ).count()
-        
-        submitted_records = db.query(BudgetData).filter(
-            and_(
-                BudgetData.user_id == user_id,
-                BudgetData.business_unit == business_unit,
-                BudgetData.is_submitted == True
-            )
-        ).count()
-        
-        latest_submission = db.query(BudgetData).filter(
-            and_(
-                BudgetData.user_id == user_id,
-                BudgetData.business_unit == business_unit,
-                BudgetData.is_submitted == True
-            )
-        ).order_by(BudgetData.submitted_at.desc()).first()
         
         return {
             "total_records": total_records,
-            "submitted_records": submitted_records,
-            "pending_records": total_records - submitted_records,
-            "latest_submission": latest_submission.submitted_at.isoformat() if latest_submission else None,
-            "completion_percentage": (submitted_records / total_records * 100) if total_records > 0 else 0
         }
         
     except Exception as e:

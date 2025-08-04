@@ -13,7 +13,7 @@ from st_aggrid.shared import JsCode
 
 # Page configuration
 st.set_page_config(
-    page_title="Budget Portal - Excel-like Interface",
+    page_title="Budget Portal",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -85,6 +85,7 @@ def init_session_state():
     if 'last_refresh' not in st.session_state:
         st.session_state.last_refresh = datetime.now()
 
+
 def api_call(endpoint: str, method: str = "GET", data: Dict = None) -> Dict:
     """Make API calls with error handling"""
     try:
@@ -115,25 +116,26 @@ def login_form():
     st.markdown("""
     <div class="main-header">
         <h1>🏢 Budget Portal</h1>
-        <p>Excel-like Interface for Budget Management with PowerBI Integration</p>
     </div>
     """, unsafe_allow_html=True)
     
     with st.form("login_form"):
-        st.subheader("🔐 Authentication")
+        st.subheader("Authentication")
         col1, col2 = st.columns(2)
         
         with col1:
             user_id = st.text_input("User ID", placeholder="Enter your user ID")
         
         with col2:
-            business_units = [
-                "Sales North", "Sales South", "Marketing", "Operations", 
-                "Finance", "HR", "IT", "Customer Service"
-            ]
+            business_units = ['CHINA-01', 'CHINA-02', 'CHINA-03A', 'CHINA-03B', 'CHINA-04', 
+                            'CHINA-05', 'CHINA-06', 'CHINA-07', 'CHINA-08', 'CHINA-09', 
+                            'CHINA-10', 'CHINA-11', 'CHINA-12', 'CHINA-13', 'CHINA-14', 
+                            'CHINA-15', 'CHINA-16', 'CHINA-17', 'CHINA-18', 'CHINA-19', 
+                            'CHINA-20', 'CHINA-21', 'CHINA-22', 'CHINA-23', 'CHINA-24', 
+                            'CHINA-25', 'CHINA-26', 'CHINA-NEW', 'CHINA-ROC']
             business_unit = st.selectbox("Business Unit", business_units)
         
-        submitted = st.form_submit_button("🚀 Login", use_container_width=True)
+        submitted = st.form_submit_button("Login", use_container_width=True)
         
         if submitted and user_id:
             with st.spinner("Authenticating..."):
@@ -156,6 +158,7 @@ def load_user_data() -> pd.DataFrame:
     """Load user's budget data"""
     # URL encode business unit to handle spaces
     import urllib.parse
+    print(st.session_state.business_unit)
     business_unit_encoded = urllib.parse.quote(st.session_state.business_unit)
     
     result = api_call(f"/api/data/{st.session_state.user_id}/{business_unit_encoded}", "GET")
@@ -164,6 +167,7 @@ def load_user_data() -> pd.DataFrame:
         data = result.get("data", [])
         if data:
             df = pd.DataFrame(data)
+            print(df)
             return df
     
     return pd.DataFrame()
@@ -175,16 +179,37 @@ def create_excel_grid(df: pd.DataFrame):
         return {}
     
     # Configure grid options
-    gb = GridOptionsBuilder.from_dataframe(df)
+    df_temp = df.copy()
+    df_temp = df_temp.drop(columns=['id', 'user_id', 'business_unit'], errors='ignore')
+    df_temp['Index'] = [i for i in range(len(df_temp))]
+    gb = GridOptionsBuilder.from_dataframe(df_temp)
     
     # Define column configurations
-    editable_columns = ['budget_amount', 'forecast_sales', 'comments']
-    readonly_columns = ['business_unit', 'product_category', 'region', 'quarter', 
-                       'year', 'historical_sales', 'target_sales', 'market_share']
-    
+    editable_columns = ['Y2025B', 'Y2026P', 'Y2027P', 'Y2028P', 'Y2029P', 'Sales_Remark']
+    readonly_columns = ['Index', 'Sales_Region', 'Customer_Note', 'Customer_Group', 'BizType',
+            'Vendor_Category', 'Vendor_Grouping', 'ProductNature', 'Y2019A', 'Y2020A',
+            'Y2021A', 'Y2022A', 'Y2023A', 'Y2024B', 'Y2024Q3F', 'Y2024A08', 'Y2024R08',
+            'avg1924']
+    pinned_columns = ['Index', 'Sales_Region', 'Customer_Note', 'Customer_Group', 'BizType']
+
     # Set column properties
-    for col in df.columns:
-        if col in editable_columns:
+    for col in df_temp.columns:
+        if col in pinned_columns:
+            gb.configure_column(
+                col, 
+                editable=False,
+                pinned='left',  # Pin to the left
+                cellStyle=JsCode("""
+                function(params) {
+                    return {
+                        'background-color': '#f3f4f6',
+                        'color': '#6b7280',
+                        'font-weight': 'bold'  // Optional: emphasize pinned columns
+                    };
+                }
+                """)
+            )
+        elif col in editable_columns:
             gb.configure_column(
                 col, 
                 editable=True,
@@ -199,7 +224,8 @@ def create_excel_grid(df: pd.DataFrame):
             )
         elif col in readonly_columns:
             gb.configure_column(
-                col, 
+                col,
+                width=120,
                 editable=False,
                 cellStyle=JsCode("""
                 function(params) {
@@ -211,7 +237,7 @@ def create_excel_grid(df: pd.DataFrame):
                 """)
             )
         else:
-            gb.configure_column(col, editable=False)
+            continue  # Skip any columns not in editable or readonly lists
     
     # Grid options
     gb.configure_default_column(resizable=True, sortable=True, filter=True)
@@ -252,14 +278,20 @@ def save_changes(updated_data: pd.DataFrame):
     updates = []
     for _, row in updated_data.iterrows():
         id_val = row.get("id")
-        budget_val = row.get("budget_amount")
-        forecast_val = row.get("forecast_sales")
-        comments_val = row.get("comments")
+        y2025b_val = row.get("Y2025B")
+        y2026p_val = row.get("Y2026P")
+        y2027p_val = row.get("Y2027P")
+        y2028p_val = row.get("Y2028P")
+        y2029p_val = row.get("Y2029P")
+        sales_remark_val = row.get("Sales_Remark")
         update_dict = {
             "id": id_val,
-            "budget_amount": 0 if pd.isna(budget_val) else budget_val,
-            "forecast_sales": 0 if pd.isna(forecast_val) else forecast_val,
-            "comments": "" if pd.isna(comments_val) else comments_val
+            "Y2025B": 0 if pd.isna(y2025b_val) else y2025b_val,
+            "Y2026P": 0 if pd.isna(y2026p_val) else y2026p_val,
+            "Y2027P": 0 if pd.isna(y2027p_val) else y2027p_val,
+            "Y2028P": 0 if pd.isna(y2028p_val) else y2028p_val,
+            "Y2029P": 0 if pd.isna(y2029p_val) else y2029p_val,
+            "Sales_Remark": "" if pd.isna(sales_remark_val) else sales_remark_val
         }
         updates.append(update_dict)
     
@@ -305,9 +337,9 @@ def display_dashboard():
     
     # Sidebar controls
     with st.sidebar:
-        st.subheader("🎛️ Controls")
+        st.subheader("Controls")
         
-        if st.button("🔄 Refresh Data", use_container_width=True):
+        if st.button("Refresh Data", use_container_width=True):
             st.session_state.data = load_user_data()
             st.session_state.last_refresh = datetime.now()
             st.rerun()
@@ -315,7 +347,7 @@ def display_dashboard():
         st.markdown(f"**Last Refresh:** {st.session_state.last_refresh.strftime('%H:%M:%S')}")
         
         # Submission status
-        st.subheader("📈 Status")
+        st.subheader("Status")
         import urllib.parse
         business_unit_encoded = urllib.parse.quote(st.session_state.business_unit)
         status_result = api_call(f"/api/submission-status/{st.session_state.user_id}/{business_unit_encoded}", "GET")
@@ -345,6 +377,11 @@ def display_dashboard():
         # Logout
         if st.button("🚪 Logout", use_container_width=True):
             st.session_state.authenticated = False
+            st.session_state.user_id = ""
+            st.session_state.business_unit = ""
+            st.session_state.session_token = ""
+            st.session_state.data = pd.DataFrame()
+            st.session_state.last_refresh = datetime.now()
             st.rerun()
     
     # Load data if not already loaded

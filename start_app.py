@@ -38,7 +38,7 @@ def start_api_server():
     
     return subprocess.Popen([
         sys.executable, "-m", "uvicorn", 
-        "api_server:app", 
+        "APIServer:app", 
         "--host", "127.0.0.1", 
         "--port", "8000", 
         "--reload"
