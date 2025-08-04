@@ -21,11 +21,15 @@ app = FastAPI(
 
 # CORS middleware - configure based on environment
 if config.is_production():
-    # In production, be more restrictive with CORS
+    # In production, be more restrictive with CORS but include common deployment platforms
     allowed_origins = [
         "https://*.streamlit.app",
         "https://*.streamlitapp.com", 
-        "https://your-frontend-domain.com"  # Add your actual domain
+        "https://your-frontend-domain.com",  # Add your actual domain
+        "https://*.onrender.com",  # If using Render for frontend
+        "https://*.herokuapp.com", # If using Heroku
+        "https://*.vercel.app",    # If using Vercel
+        "https://*.netlify.app"    # If using Netlify
     ]
 else:
     # In development, allow all origins

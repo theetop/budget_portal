@@ -8,12 +8,17 @@ class Config:
         
         # API Configuration
         if self.is_production():
-            self.API_BASE_URL = os.getenv('API_BASE_URL', 'https://your-app.onrender.com')
+            # Try to get the actual deployment URL from environment
+            # This should be set to your actual FastAPI deployment URL
+            self.API_BASE_URL = os.getenv('API_BASE_URL', os.getenv('RENDER_EXTERNAL_URL', 'https://your-app.onrender.com'))
+            self.API_HOST = os.getenv('API_HOST', '0.0.0.0')
         else:
             self.API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000')
+            self.API_HOST = os.getenv('API_HOST', '127.0.0.1')
         
         # Database Configuration
         self.DATABASE_URL = self._get_database_url()
+        self.API_PORT = int(os.getenv('API_PORT', '8000'))
         
         # PowerBI Configuration
         self.POWERBI_CLIENT_ID = os.getenv('POWERBI_CLIENT_ID', '')

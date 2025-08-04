@@ -94,27 +94,56 @@ def api_call(endpoint: str, method: str = "GET", data: Optional[Dict] = None) ->
         url = f"{API_BASE_URL}{endpoint}"
         timeout = 30  # 30 seconds timeout for production
         
+        # Debug information (only show in development)
+        if not config.is_production():
+            st.info(f"Making {method} request to: {url}")
+        
+        headers = {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+        }
+        
         if method == "GET":
-            response = requests.get(url, params=data, timeout=timeout)
+            response = requests.get(url, params=data, headers=headers, timeout=timeout)
         elif method == "POST":
-            response = requests.post(url, json=data, timeout=timeout)
+            response = requests.post(url, json=data, headers=headers, timeout=timeout)
         else:
-            response = requests.request(method, url, json=data, timeout=timeout)
+            response = requests.request(method, url, json=data, headers=headers, timeout=timeout)
+        
+        # Debug response status
+        if not config.is_production():
+            st.info(f"Response status: {response.status_code}")
         
         if response.status_code == 200:
             return response.json()
         else:
-            st.error(f"API Error: {response.status_code} - {response.text}")
-            return {"success": False, "error": response.text}
+            error_msg = f"API Error: {response.status_code}"
+            try:
+                error_detail = response.json().get('detail', response.text)
+                error_msg += f" - {error_detail}"
+            except:
+                error_msg += f" - {response.text}"
+            
+            st.error(error_msg)
+            return {"success": False, "error": error_msg}
             
     except requests.exceptions.Timeout:
-        st.error("Request timed out. Please try again.")
+        error_msg = f"Request timed out after {timeout} seconds. The server might be slow or unavailable."
+        st.error(error_msg)
         return {"success": False, "error": "Request timeout"}
-    except requests.exceptions.ConnectionError:
-        st.error("Cannot connect to API server. Please check your internet connection and try again.")
+    except requests.exceptions.ConnectionError as e:
+        error_msg = f"Cannot connect to API server at {API_BASE_URL}. Please check if the server is running and accessible."
+        st.error(error_msg)
+        if not config.is_production():
+            st.error(f"Connection error details: {str(e)}")
         return {"success": False, "error": "Connection failed"}
+    except requests.exceptions.RequestException as e:
+        error_msg = f"Request failed: {str(e)}"
+        st.error(error_msg)
+        return {"success": False, "error": str(e)}
     except Exception as e:
-        st.error(f"Request failed: {str(e)}")
+        error_msg = f"Unexpected error: {str(e)}"
+        st.error(error_msg)
         return {"success": False, "error": str(e)}
 
 def login_form():
@@ -388,7 +417,7 @@ def display_dashboard():
             st.success("🟢 API Server Connected")
         else:
             st.error("🔴 API Server Disconnected")
-            if config.is_development():
+            if not config.is_production():
                 st.info(f"API URL: {API_BASE_URL}")
         
         # PowerBI status (if available)
