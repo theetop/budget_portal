@@ -9,8 +9,6 @@ from datetime import datetime, timedelta
 import uuid
 from pydantic import BaseModel
 
-from powerbi_service import PowerBIService
-
 from DatabaseManager import get_db, China2025B, UserSession, create_tables
 
 app = FastAPI(title="Budget Portal API", version="1.0.0")
@@ -26,7 +24,6 @@ app.add_middleware(
 
 # Thread lock for concurrent operations
 data_lock = threading.RLock()
-powerbi_service = PowerBIService()
 
 @app.on_event("startup")
 async def startup_event():
@@ -364,10 +361,8 @@ async def update_powerbi_async(data: List[Dict[str, Any]]):
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint"""
-    powerbi_status = powerbi_service.validate_connection()
     return {
         "status": "healthy",
-        "powerbi_connected": powerbi_status,
         "timestamp": datetime.utcnow().isoformat()
     }
 
