@@ -178,11 +178,14 @@ def create_excel_grid(df: pd.DataFrame):
         st.warning("No data available for your business unit.")
         return {}
     
-    # Configure grid options
-    df_temp = df.copy()
-    df_temp = df_temp.drop(columns=['id', 'user_id', 'business_unit'], errors='ignore')
-    df_temp['Index'] = [i for i in range(len(df_temp))]
-    gb = GridOptionsBuilder.from_dataframe(df_temp)
+    # Add Index column to df
+    df['Index'] = [i for i in range(len(df))]
+    
+    # Reorder columns to put 'Index' first
+    cols = ['Index'] + [col for col in df.columns if col != 'Index']
+    df = df[cols]
+    
+    gb = GridOptionsBuilder.from_dataframe(df)
     
     # Define column configurations
     editable_columns = ['Y2025B', 'Y2026P', 'Y2027P', 'Y2028P', 'Y2029P', 'Sales_Remark']
@@ -191,10 +194,16 @@ def create_excel_grid(df: pd.DataFrame):
             'Y2021A', 'Y2022A', 'Y2023A', 'Y2024B', 'Y2024Q3F', 'Y2024A08', 'Y2024R08',
             'avg1924']
     pinned_columns = ['Index', 'Sales_Region', 'Customer_Note', 'Customer_Group', 'BizType']
+    hidden_columns = ['id', 'user_id', 'business_unit']
 
     # Set column properties
-    for col in df_temp.columns:
-        if col in pinned_columns:
+    for col in df.columns:
+        if col in hidden_columns:
+            gb.configure_column(
+                col,
+                hide=True
+            )
+        elif col in pinned_columns:
             gb.configure_column(
                 col, 
                 editable=False,
@@ -391,31 +400,25 @@ def display_dashboard():
     
     # Main content area
     if not st.session_state.data.empty:
-        # Excel-like grid
         grid_response = create_excel_grid(st.session_state.data)
         
-        # Action buttons
-        col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
+        col1, col2, col3 = st.columns([2, 2, 2])
         
         with col1:
-            if st.button("💾 Save Changes", use_container_width=True, type="primary"):
+            if st.button("Save Changes", use_container_width=True, type="primary"):
                 if 'data' in grid_response and not grid_response['data'].empty:
                     if save_changes(grid_response['data']):
                         time.sleep(1)
                         st.rerun()
         
         with col2:
-            if st.button("📤 Submit to PowerBI", use_container_width=True, type="secondary"):
+            if st.button("Submit to PowerBI", use_container_width=True, type="secondary"):
                 if submit_data():
                     time.sleep(2)
                     st.rerun()
         
         with col3:
-            if st.button("📊 View Summary", use_container_width=True):
-                show_summary_charts(st.session_state.data)
-        
-        with col4:
-            if st.button("📋 Export Data", use_container_width=True):
+            if st.button("Export Data", use_container_width=True):
                 export_data(st.session_state.data)
         
         # Data change detection
@@ -426,35 +429,6 @@ def display_dashboard():
     
     else:
         st.info("📝 No budget data found. Data will be loaded from PowerBI when available.")
-
-def show_summary_charts(df: pd.DataFrame):
-    """Display summary charts"""
-    st.subheader("📊 Budget Summary")
-    
-    if not df.empty:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # Budget vs Target chart
-            fig1 = px.bar(
-                df, 
-                x='product_category', 
-                y=['budget_amount', 'target_sales'], 
-                title="Budget vs Target Sales by Product Category",
-                barmode='group'
-            )
-            st.plotly_chart(fig1, use_container_width=True)
-        
-        with col2:
-            # Regional distribution
-            if 'region' in df.columns:
-                fig2 = px.pie(
-                    df, 
-                    values='budget_amount', 
-                    names='region', 
-                    title="Budget Distribution by Region"
-                )
-                st.plotly_chart(fig2, use_container_width=True)
 
 def export_data(df: pd.DataFrame):
     """Export data to Excel"""

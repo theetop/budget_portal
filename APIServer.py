@@ -248,7 +248,34 @@ async def update_budget_data(
                         record.Sales_Remark = update["Sales_Remark"]
                     
                     updated_records.append(record.id)
-                    
+
+            # Query the database and convert results to a list of dictionaries
+            # Only for DEMO (save to excel)
+            # Delete this later
+            # =============================================================
+            records = db.query(China2025B).filter(
+                and_(
+                    China2025B.user_id == request.user_id,
+                    China2025B.business_unit == request.business_unit
+                )
+            ).all()
+            data = [
+                {
+                    "id": record.id,
+                    "user_id": record.user_id,
+                    "business_unit": record.business_unit,
+                    "Y2025B": record.Y2025B,
+                    "Y2026P": record.Y2026P,
+                    "Y2027P": record.Y2027P,
+                    "Y2028P": record.Y2028P,
+                    "Y2029P": record.Y2029P,
+                    "Sales_Remark": record.Sales_Remark
+                }
+                for record in records
+            ]
+            pd.DataFrame(data).to_excel('temp1_Powerbi_submission_data.xlsx', sheet_name=f"{request.business_unit}", index=False)
+            # =============================================================
+            
             db.commit()
             
             return {
