@@ -1,5 +1,8 @@
 import os
 from typing import Optional
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class Config:
     def __init__(self):
@@ -10,10 +13,10 @@ class Config:
         if self.is_production():
             # Try to get the actual deployment URL from environment
             # This should be set to your actual FastAPI deployment URL
-            self.API_BASE_URL = os.getenv('API_BASE_URL', os.getenv('RENDER_EXTERNAL_URL', 'https://your-app.onrender.com'))
+            self.API_BASE_URL = os.getenv('API_BASE_URL', os.getenv('RENDER_EXTERNAL_URL', 'https://budget-portal-api.onrender.com'))
             self.API_HOST = os.getenv('API_HOST', '0.0.0.0')
         else:
-            self.API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000')
+            self.API_BASE_URL = os.getenv('API_BASE_URL', 'https://budget-portal-api.onrender.com')
             self.API_HOST = os.getenv('API_HOST', '127.0.0.1')
         
         # Database Configuration
