@@ -92,11 +92,11 @@ def api_call(endpoint: str, method: str = "GET", data: Optional[Dict] = None) ->
     """Make API calls with error handling and timeout"""
     try:
         url = f"{API_BASE_URL}{endpoint}"
-        timeout = 30  # 30 seconds timeout for production
+        timeout = 30
         
         # Debug information (only show in development)
-        if not config.is_production():
-            st.info(f"Making {method} request to: {url}")
+        # if not config.is_production():
+            # st.info(f"Making {method} request to: {url}")
         
         headers = {
             'Content-Type': 'application/json',
@@ -111,8 +111,8 @@ def api_call(endpoint: str, method: str = "GET", data: Optional[Dict] = None) ->
             response = requests.request(method, url, json=data, headers=headers, timeout=timeout)
         
         # Debug response status
-        if not config.is_production():
-            st.info(f"Response status: {response.status_code}")
+        # if not config.is_production():
+            # st.info(f"Response status: {response.status_code}")
         
         if response.status_code == 200:
             return response.json()
